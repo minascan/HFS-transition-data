@@ -1,47 +1,102 @@
-program trans_prop
+program hyperfine_transition_data
 
    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  
-   !!!             input file: name1.name2.ct.lsj                           !!!
+   !!!             input files: name1.name2.ct.lsj                          !!!
+   !!!                                 name1.chlsj                          !!!
+   !!!                                 name2.chlsj                          !!!
   
    !!!             output file: hfs.ct.lsj                                  !!!
    !!!                                                                      !!!
    !!!     Written by Asimina Papoulia ,   September 2018                   !!!
+   !!!                     Last Update ,    November 2019                   !!!
    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   
   implicit none
 
-  double precision, parameter :: nuc_spin = 2.5, l2 = 1.0
-  character(100) :: filename1, dummy, conf_lo, conf_up, E_lo, E_up
-  character(180) :: string
-  integer :: count1, j, i, l_up, l_lo, test, nom1, den1, nom2, den2, k, l, blank
-  integer :: twoj_up, twoj_lo
-  double precision :: j_up, j_lo, A_c, Ahfs_c, A_b, Ahfs_b, f_up, f_up_max, f_up_min 
-  double precision :: f_lo, f_lo_max, f_lo_min, gf_c, gf_b, w6j, gf_hfs_c, gf_hfs_b
-  double precision :: uncertainty
+  integer, parameter :: dp = selected_real_kind(15, 307)
+  real(kind=dp),parameter :: MHz_to_invcm = 3.3356410D-05, au_to_invcm = 21947463068D-06
+  real(kind=dp),parameter :: l2 = 1.0  ! Wigner 6j symbol parameter
   
-  count1 = 0
+  character(100) :: filename1, filename2, filename3, dummy, conf_lo, conf_up, E_lo, E_up
+  character(20), dimension(:), allocatable :: E_levels
+
+  integer :: i, j, levels, count1, count2, count3, l_up, l_lo, test, nom1, den1, nom2, den2 
+  integer :: k, l, blank, twoj_up, twoj_lo
+  
+  double precision, dimension(:,:), allocatable :: hfs_results, ab_constants 
+  double precision :: nuc_spin, j_up, j_lo, A_b, Ahfs_b, A_c, Ahfs_c, f_up, gf_b, gf_c, gf_hfs_c   
+  double precision :: gf_hfs_b, f_up_max, f_up_min, f_lo, f_lo_max, f_lo_min, w6j, uncertainty 
   
   print *, 'Full name of the transition data file'
   read (*, '(a)') filename1
-  !print*, 'Give the nuclear spin I'
-  !read (*,'(f3.1)') nuc_spin
+  print *, 'Full name of the first hfs data file'
+  read (*, '(a)') filename2
+  print *, 'Full name of the second hfs data file'
+  read (*, '(a)') filename3
+  print *, 'Total number for the levels of the computed A and B hfs constants'
+  read (*, '(i3)') levels      ! needed for ALLOCATION of E_levels, hfs_results, ab_constants
+  print*, 'Give the nuclear spin I'
+  read (*,'(f3.1)') nuc_spin   ! For 27Al is 2.5
+
+  allocate(E_levels(levels), hfs_results(levels,3), ab_constants(levels,3))
   
-  open(10, file=filename1, status='old', form='formatted', &  !Open the input transition data file
-       action='read')
+  !Open and First Reading of the input files to count the number of lines
+  call line_counting(10,filename1,count1)
+  call line_counting(20,filename2,count2)
+  call line_counting(30,filename3,count3)
+  !================================================================================================================
+  !================================================================================================================
+  !Actual Reading of the files containing the hfs constants. Assign them to variables, convert them to cm-1
+  !and save them into the 2-D matrix called 'ab_constants'
+  !--------------- FILE 1 - EVEN states -----------------
+  do j = 1, 6
+     read(20, '(a)') dummy ! headers and blank lines
+  end do
+  do i = 1, count2-6
+     read(20, '(d14.6, a52, d12.7, d16.7, a16)') hfs_results(i,1), dummy, hfs_results(i,2), hfs_results(i,3), dummy
+     ab_constants(i,1) = hfs_results(i,1)*au_to_invcm
+     ab_constants(i,2) = hfs_results(i,2)*MHz_to_invcm
+     ab_constants(i,3) = hfs_results(i,3)*MHz_to_invcm
+     print*, hfs_results(i,1), hfs_results(i,2), hfs_results(i,3)
+  enddo
+  rewind(20)
+  do j = 1, 6
+     read(20, '(a)') dummy
+  end do
+  do i = 1, count2-6
+     read(20, '(a14, a96)') E_levels(i), dummy
+     print*, E_levels(i)
+  end do
+  
+  !--------------- FILE 2 - ODD states -----------------
+  do j = 1, 6
+     read(30, '(a)') dummy
+  end do
+  do i = count2-6+1, count2+count3-12
+     read(30, '(d14.6, a46, d12.7, d16.7, a16)') hfs_results(i,1), dummy, hfs_results(i,2), hfs_results(i,3), dummy
+     ab_constants(i,1) = hfs_results(i,1)*au_to_invcm
+     ab_constants(i,2) = hfs_results(i,2)*MHz_to_invcm
+     ab_constants(i,3) = hfs_results(i,3)*MHz_to_invcm
+     print *, hfs_results(i,1), hfs_results(i,2), hfs_results(i,3)
+  enddo
+  rewind(30)
+  do j = 1, 6
+     read(30, '(a)') dummy
+  end do
+  do i = count2-6+1, count2+count3-12
+     read(30, '(a14, a96)') E_levels(i), dummy
+     print*, E_levels(i)
+  end do
+  !================================================================================================================
+  !================================================================================================================
+  
   open(40, file='hfs.ct.lsj', status='old', form='formatted', &   !Open the output hfs transition data file
        action='write', position='append')
-!Writing the headers in the output file
+  !Writing the headers in the output file
   write(40,'(a51)') '         UPPER                     LOWER                     '
-  write(40,'(a99)') '    Conf        J    F       Conf        J    F       A (s-1)         gf         log(gf)    +/-     '
-!First reading of the input file to count the number of lines
-  do
-     read(10, '(a)', end=19) string
-     count1 = count1 + 1
-  end do
-19 continue
-  rewind(10)
-  
-  write(*,'(a42,i3)') ' The number of lines in the file is ', count1
+  write(40,'(a113)') '    Conf        J    F       Conf        J    F     E (cm-1)     A (s-1)         gf          log(gf) &
+       &   +/-      '
+
 
   do j = 1, 3
      read(10, '(a)') dummy
@@ -49,13 +104,13 @@ program trans_prop
 !------------------------------------------------------------------------------------------------------
 ! main loop starts here
   do i = 1, (count1-3)/7        !header lines are 3 in the .ct.lsj input file
-     ! every loop reads the two blank lines first + 5 more lines that contain all the info
+     ! every loop reads the two blank lines and the next 5 contain the data for each transition 
      do j = 1, 2
         read(10, '(a)') dummy
      enddo
      ! and then reads the other five lines of the input file and assign the useful values to variables
-     read(10, '(i4, a14, a20, a11)') twoj_lo, E_lo, dummy, conf_lo
-     read(10, '(i4, a14, a20, a11)') twoj_up, E_up, dummy, conf_up
+     read(10, '(i4, a12, a22, a11)') twoj_lo, E_lo, dummy, conf_lo
+     read(10, '(i4, a12, a22, a11)') twoj_up, E_up, dummy, conf_up
      read(10, '(a)') dummy
      read(10, '(a30, d12.7, a9, d12.1, a17)') dummy, gf_b, dummy, A_b, dummy
      read(10, '(a30, d12.7, a8, d13.3)') dummy, gf_c, dummy, A_c
@@ -77,6 +132,8 @@ program trans_prop
      l = 0  ! step counter of possible F values for the LOWER level !***
      f_up = f_up_min
      f_lo = f_lo_min
+
+     
      
      do while (f_up.le.f_up_max)  ! loop for all possible F values of the UPPER level
         blank = 0  ! when zero there is a new combination of quantum nubers and therefore a
@@ -87,47 +144,55 @@ program trans_prop
            ! and whether it is a transition for a new F value of the upper level i.e. blank = 0 
            if ((0.le.abs(f_up-f_lo) .and. abs(f_up-f_lo).le.1 .and. blank.eq.0) .and. &
                 (f_up.ne.0 .or. f_lo.ne.0)) then
-                  
+              !===============NEW======================
+              ! calculate the hfs transition energies
+              !call hfs_trans_energies()
               ! calculate the transition data in the COULOBM gauge for this hfs transition
               w6j = wig6j(j_lo, nuc_spin, f_lo, f_up, l2, j_up)
               call probabilities(f_lo, j_up, w6j, A_c, Ahfs_c)
               call weightedf(f_up, f_lo, j_lo, w6j, gf_c, gf_hfs_c)           
               ! write data in the output file
-              if (conf_up.eq.'3s(2).4d_2D' .and. (E_up.eq.' -242.14686040' .or. E_up.eq.' -242.14683776')) then
-                 write(40,'(1x,a11,a1,2x,f3.1,2x,f3.1,3x,a11,3x,f3.1,2x,f3.1,2x,a1,1x,d11.5,2x,d12.6)') &
-                      conf_up,'b', j_up, f_up, conf_lo, j_lo, f_lo, 'C', Ahfs_c, gf_hfs_c
-              elseif (conf_lo.eq.'3s(2).4d_2D' .and. (E_lo.eq.' -242.14686040' .or. E_lo .eq.' -242.14683776')) then
-                 write(40,'(1x,a11,3x,f3.1,2x,f3.1,3x,a11,a1,2x,f3.1,2x,f3.1,2x,a1,1x,d11.5,2x,d12.6)') &
-                      conf_up, j_up, f_up, conf_lo,'b', j_lo, f_lo, 'C', Ahfs_c, gf_hfs_c
+              !---------------------------------------------------------------------------------------------------------------------------------
+              ! special case for the Al_I computations since two states have the same label and we need to distinguish the second one with a "b"
+              ! this state can be either the lower or the upper and thus we need to check that for both cases
+              if (conf_up.eq.'3s(2).4d_2D' .and. (E_up.eq.' -242.146860' .or. E_up.eq.' -242.146837')) then ! we need to check for both j=3/2,5/2 
+                 write(40,'(1x,a11,a1,2x,f3.1,2x,f3.1,3x,a11,3x,f3.1,2x,f3.1,2x,f9.2,2x,a1,1x,d11.5,2x,d12.6)') &
+                      conf_up,'b', j_up, f_up, conf_lo, j_lo, f_lo, hfs_results(1,1), 'C', Ahfs_c, gf_hfs_c
+              elseif (conf_lo.eq.'3s(2).4d_2D' .and. (E_lo.eq.' -242.146860' .or. E_lo .eq.' -242.146837')) then
+                 write(40,'(1x,a11,3x,f3.1,2x,f3.1,3x,a11,a1,2x,f3.1,2x,f3.1,2x,f9.2,2x,a1,1x,d11.5,2x,d12.6)') &
+                      conf_up, j_up, f_up, conf_lo,'b', j_lo, f_lo, hfs_results(1,1), 'C', Ahfs_c, gf_hfs_c
+              !---------------------------------------------------------------------------------------------------------------------------------   
               else
-                 write(40,'(1x,a11,3x,f3.1,2x,f3.1,3x,a11,3x,f3.1,2x,f3.1,2x,a1,1x,d11.5,2x,d12.6)') &
-                      conf_up, j_up, f_up, conf_lo, j_lo, f_lo, 'C', Ahfs_c, gf_hfs_c
+                 write(40,'(1x,a11,3x,f3.1,2x,f3.1,3x,a11,3x,f3.1,2x,f3.1,2x,f9.2,2x,a1,1x,d11.5,2x,d12.6)') &
+                      conf_up, j_up, f_up, conf_lo, j_lo, f_lo, hfs_results(1,1), 'C', Ahfs_c, gf_hfs_c
               end if
-              print*, Ahfs_c, gf_hfs_c
+              !print*, Ahfs_c, gf_hfs_c
               ! calculate the transition data in the BABUSHKIN gauge for this hfs transition
               call probabilities(f_lo, j_up, w6j, A_b, Ahfs_b)
               call weightedf(f_up, f_lo, j_lo, w6j, gf_b, gf_hfs_b)
               uncertainty = uncert(gf_hfs_c, gf_hfs_b)          
-              write(40,'(a50,a1,1x,d11.5,2x,d12.6,3x,f8.5,2x,f7.5)') '                                                  ', &
+              write(40,'(a61,a1,1x,d11.5,2x,d12.6,3x,f8.5,2x,f7.5)') '                                                  ', &
                    'B', Ahfs_b, gf_hfs_b, log10(gf_hfs_b), uncertainty
-              print*, Ahfs_b, gf_hfs_b, log10(gf_hfs_b), uncertainty
+              !print*, Ahfs_b, gf_hfs_b, log10(gf_hfs_b), uncertainty
               blank = blank + 1  !%%%
               ! checking whether the transition is allowed i.e. DF = 0 or +/-1
               ! and whether it is a transition for the same F value of the upper level i.e. blank >=1 
            elseif (0.le.abs(f_up-f_lo) .and. abs(f_up-f_lo).le.1 .and. blank.ne.0) then
-              
+              !===============NEW======================
+              ! calculate the hfs transition energies
+              !call hfs_trans_energies()
               ! calculate the transition data in the COULOBM gauge for this hfs transition         
               w6j = wig6j(j_lo, nuc_spin, f_lo, f_up, l2, j_up)
               call probabilities(f_lo, j_up, w6j, A_c, Ahfs_c)
               call weightedf(f_up, f_lo, j_lo, w6j, gf_c, gf_hfs_c)                    
               ! write data in the output file
-              write(40, '(a45,f3.1,2x,a1,1x,d11.5,2x,d12.6)') '                                            ', &
-                   f_lo, 'C', Ahfs_c, gf_hfs_c
+              write(40, '(a45,f3.1,2x,f9.2,2x,a1,1x,d11.5,2x,d12.6)') '                                            ', &
+                   f_lo, hfs_results(1,1), 'C', Ahfs_c, gf_hfs_c
               ! calculate the transition data in the BABUSHKIN gauge for this hfs transition
               call probabilities(f_lo, j_up, w6j, A_b, Ahfs_b)
               call weightedf(f_up, f_lo, j_lo, w6j, gf_b, gf_hfs_b)
               uncertainty = uncert(gf_hfs_c, gf_hfs_b)
-              write(40,'(a50,a1,1x,d11.5,2x,d12.6,3x,f8.5,2x,f7.5)') '                                                  ', &
+              write(40,'(a61,a1,1x,d11.5,2x,d12.6,3x,f8.5,2x,f7.5)') '                                                  ', &
                     'B', Ahfs_b, gf_hfs_b, log10(gf_hfs_b), uncertainty
               
            endif
@@ -148,7 +213,30 @@ program trans_prop
   enddo 
 
 contains
-!-----------------------------------------------------------------------------------------------------
+  !-----------------------------------------------------------------------------------------------------
+  subroutine line_counting(fnum,filename, counter)
+    implicit none
+    
+    integer, intent(in) :: fnum
+    character(100), intent(in) :: filename
+    integer, intent(out) :: counter
+    character(180) :: string
+    
+    open(unit=fnum, file=filename, status='old', form='formatted', action='read')
+
+    counter = 0
+    
+    do
+       read(fnum, '(a)', end=19) string
+       counter = counter + 1
+    end do
+19  continue
+    rewind(fnum)
+
+    write(*,'(a42,i3)') ' The number of lines in the file is ', counter
+    
+  end subroutine line_counting
+  !-----------------------------------------------------------------------------------------------------
   subroutine probabilities(f_lower, j_upper, w6j, prop, outp)
 
     implicit none
@@ -278,5 +366,4 @@ contains
     
   end function factorial
 !-----------------------------------------------------------------------------------------------------
-end program trans_prop
-
+end program hyperfine_transition_data
