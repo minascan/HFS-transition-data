@@ -18,14 +18,18 @@ program hyperfine_transition_data
   real(kind=dp),parameter :: l2 = 1.0  ! Wigner 6j symbol parameter
   
   character(100) :: filename1, filename2, filename3, dummy, conf_lo, conf_up, E_lo, E_up
+  character(100) :: Bab_data
   character(20), dimension(:), allocatable :: E_levels
 
   integer :: i, j, levels, count1, count2, count3, l_up, l_lo, test, nom1, den1, nom2, den2 
-  integer :: k, l, blank, twoj_up, twoj_lo
+  integer :: m, ll, uu, k, l, blank, twoj_up, twoj_lo
   
   double precision, dimension(:,:), allocatable :: hfs_results, ab_constants 
   double precision :: nuc_spin, j_up, j_lo, A_b, Ahfs_b, A_c, Ahfs_c, f_up, gf_b, gf_c, gf_hfs_c   
-  double precision :: gf_hfs_b, f_up_max, f_up_min, f_lo, f_lo_max, f_lo_min, w6j, uncertainty 
+  double precision :: gf_hfs_b, f_up_max, f_up_min, f_lo, f_lo_max, f_lo_min, w6j, uncertainty
+  double precision :: E_l, E_u, A_lo, A_up, B_lo, B_up
+
+  logical :: low_level, upper_level
   
   print *, 'Full name of the transition data file'
   read (*, '(a)') filename1
@@ -38,6 +42,7 @@ program hyperfine_transition_data
   print*, 'Give the nuclear spin I'
   read (*,'(f3.1)') nuc_spin   ! For 27Al is 2.5
 
+  !print*, 'NEW !!!'
   allocate(E_levels(levels), hfs_results(levels,3), ab_constants(levels,3))
   
   !Open and First Reading of the input files to count the number of lines
@@ -57,14 +62,15 @@ program hyperfine_transition_data
      ab_constants(i,1) = hfs_results(i,1)*au_to_invcm
      ab_constants(i,2) = hfs_results(i,2)*MHz_to_invcm
      ab_constants(i,3) = hfs_results(i,3)*MHz_to_invcm
-     print*, hfs_results(i,1), hfs_results(i,2), hfs_results(i,3)
+     !print*, hfs_results(i,1), hfs_results(i,2), hfs_results(i,3)
+     print*, ab_constants(i,1), ab_constants(i,2), ab_constants(i,3)
   enddo
   rewind(20)
   do j = 1, 6
      read(20, '(a)') dummy
   end do
   do i = 1, count2-6
-     read(20, '(a14, a96)') E_levels(i), dummy
+     read(20, '(a2, a12, a96)') dummy, E_levels(i), dummy
      print*, E_levels(i)
   end do
   
@@ -77,19 +83,20 @@ program hyperfine_transition_data
      ab_constants(i,1) = hfs_results(i,1)*au_to_invcm
      ab_constants(i,2) = hfs_results(i,2)*MHz_to_invcm
      ab_constants(i,3) = hfs_results(i,3)*MHz_to_invcm
-     print *, hfs_results(i,1), hfs_results(i,2), hfs_results(i,3)
+     !print *, hfs_results(i,1), hfs_results(i,2), hfs_results(i,3)
+     print*, ab_constants(i,1), ab_constants(i,2), ab_constants(i,3)
   enddo
   rewind(30)
   do j = 1, 6
      read(30, '(a)') dummy
   end do
   do i = count2-6+1, count2+count3-12
-     read(30, '(a14, a96)') E_levels(i), dummy
+     read(30, '(a2, a12, a96)') dummy, E_levels(i), dummy
      print*, E_levels(i)
   end do
   !================================================================================================================
   !================================================================================================================
-  
+  !writing the headers of the output file
   open(40, file='hfs.ct.lsj', status='old', form='formatted', &   !Open the output hfs transition data file
        action='write', position='append')
   !Writing the headers in the output file
@@ -97,13 +104,15 @@ program hyperfine_transition_data
   write(40,'(a113)') '    Conf        J    F       Conf        J    F     E (cm-1)     A (s-1)         gf          log(gf) &
        &   +/-      '
 
-
+  !writing the rest of the data is done simultaneously with the reading of the transition ct.lsj file
   do j = 1, 3
      read(10, '(a)') dummy
   enddo
 !------------------------------------------------------------------------------------------------------
 ! main loop starts here
   do i = 1, (count1-3)/7        !header lines are 3 in the .ct.lsj input file
+     low_level = .false.
+     upper_level = .false.
      ! every loop reads the two blank lines and the next 5 contain the data for each transition 
      do j = 1, 2
         read(10, '(a)') dummy
@@ -114,10 +123,34 @@ program hyperfine_transition_data
      read(10, '(a)') dummy
      read(10, '(a30, d12.7, a9, d12.1, a17)') dummy, gf_b, dummy, A_b, dummy
      read(10, '(a30, d12.7, a8, d13.3)') dummy, gf_c, dummy, A_c
-     !print*, E_lo, twoj_lo, conf_lo
-     !print*, E_up, twoj_up, conf_up
+     print*, E_lo, twoj_lo, conf_lo
+     print*, E_up, twoj_up, conf_up
      !print*, gf_b, A_b
      !print*, gf_c, A_c
+     !-----------------------------------------------------------------------------------------
+     ! based on the E_lo & E_up levels we get the corresponding values of A and B hfs constants
+     do m = 1, levels
+        if (E_lo.eq.E_levels(m)) then
+           ll = m
+           low_level = .true.
+           print*, 'The lower level has been identified', ll
+        elseif (E_up.eq.E_levels(m)) then
+           uu = m
+           upper_level = .true.
+           print*, 'The upper level has been identified', uu
+        endif
+        if (low_level .and. upper_level) then
+           print*, 'Both levels have been identified', m
+           exit
+        end if     
+     end do
+     E_l  = ab_constants(ll,1)
+     A_lo = ab_constants(ll,2)
+     B_lo = ab_constants(ll,3)
+     E_u  = ab_constants(uu,1)
+     A_up = ab_constants(uu,2)
+     B_up = ab_constants(uu,3)
+     !-----------------------------------------------------------------------------------------
      
      j_up = real(twoj_up)/2
      j_lo = real(twoj_lo)/2
@@ -133,7 +166,8 @@ program hyperfine_transition_data
      f_up = f_up_min
      f_lo = f_lo_min
 
-     
+     !The strings of the format for writing data into the output file
+     Bab_data = '(a61,a1,1x,d11.5,2x,d12.6,3x,f8.5,2x,f7.5)'
      
      do while (f_up.le.f_up_max)  ! loop for all possible F values of the UPPER level
         blank = 0  ! when zero there is a new combination of quantum nubers and therefore a
@@ -171,7 +205,7 @@ program hyperfine_transition_data
               call probabilities(f_lo, j_up, w6j, A_b, Ahfs_b)
               call weightedf(f_up, f_lo, j_lo, w6j, gf_b, gf_hfs_b)
               uncertainty = uncert(gf_hfs_c, gf_hfs_b)          
-              write(40,'(a61,a1,1x,d11.5,2x,d12.6,3x,f8.5,2x,f7.5)') '                                                  ', &
+              write(40, FMT=Bab_data) '                                                  ', &
                    'B', Ahfs_b, gf_hfs_b, log10(gf_hfs_b), uncertainty
               !print*, Ahfs_b, gf_hfs_b, log10(gf_hfs_b), uncertainty
               blank = blank + 1  !%%%
@@ -192,9 +226,8 @@ program hyperfine_transition_data
               call probabilities(f_lo, j_up, w6j, A_b, Ahfs_b)
               call weightedf(f_up, f_lo, j_lo, w6j, gf_b, gf_hfs_b)
               uncertainty = uncert(gf_hfs_c, gf_hfs_b)
-              write(40,'(a61,a1,1x,d11.5,2x,d12.6,3x,f8.5,2x,f7.5)') '                                                  ', &
-                    'B', Ahfs_b, gf_hfs_b, log10(gf_hfs_b), uncertainty
-              
+              write(40, FMT=Bab_data) '                                                  ', &
+                    'B', Ahfs_b, gf_hfs_b, log10(gf_hfs_b), uncertainty              
            endif
            
            l = l + 1           !***
@@ -224,8 +257,7 @@ contains
     
     open(unit=fnum, file=filename, status='old', form='formatted', action='read')
 
-    counter = 0
-    
+    counter = 0    
     do
        read(fnum, '(a)', end=19) string
        counter = counter + 1
@@ -236,6 +268,21 @@ contains
     write(*,'(a42,i3)') ' The number of lines in the file is ', counter
     
   end subroutine line_counting
+  !-----------------------------------------------------------------------------------------------------
+  subroutine hfs_transitionE(DE_hfs)
+    implicit none
+
+    double precision, intent(in) ::
+    double precision, intent(out) :: DE_hfs
+    double precision :: C_lower, E_lower, Ehfs_lower, C_upper, E_upper, Ehfs_upper
+    
+    C_lower =
+    Ehfs_lower = E_lower +
+    C_upper =
+    Ehfs_upper = E_upper
+    DE_hfs = Ehfs_upper - Ehfs_lower
+    
+  end subroutine hfs_transitionE
   !-----------------------------------------------------------------------------------------------------
   subroutine probabilities(f_lower, j_upper, w6j, prop, outp)
 
