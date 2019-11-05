@@ -14,20 +14,20 @@ program hyperfine_transition_data
   implicit none
 
   integer, parameter :: dp = selected_real_kind(15, 307)
-  real(kind=dp),parameter :: MHz_to_invcm = 3.3356410D-05, au_to_invcm = 21947463068D-06
+  real(kind=dp),parameter :: MHz_to_invcm = 3.3356410D-05, au_to_invcm = 21947463068D-05
   real(kind=dp),parameter :: l2 = 1.0  ! Wigner 6j symbol parameter
   
   character(100) :: filename1, filename2, filename3, dummy, conf_lo, conf_up, E_lo, E_up
-  character(100) :: Bab_data
+  character(100) :: Bab_data, Coul_data_1a, Coul_data_1b, Coul_data_1c, Coul_data_2
   character(20), dimension(:), allocatable :: E_levels
 
   integer :: i, j, levels, count1, count2, count3, l_up, l_lo, test, nom1, den1, nom2, den2 
   integer :: m, ll, uu, k, l, blank, twoj_up, twoj_lo
   
-  double precision, dimension(:,:), allocatable :: hfs_results, ab_constants 
-  double precision :: nuc_spin, j_up, j_lo, A_b, Ahfs_b, A_c, Ahfs_c, f_up, gf_b, gf_c, gf_hfs_c   
-  double precision :: gf_hfs_b, f_up_max, f_up_min, f_lo, f_lo_max, f_lo_min, w6j, uncertainty
-  double precision :: E_l, E_u, A_lo, A_up, B_lo, B_up, DE_hfs
+  real(kind=dp), dimension(:,:), allocatable :: hfs_results, ab_constants 
+  real(kind=dp) :: nuc_spin, j_up, j_lo, A_b, Ahfs_b, A_c, Ahfs_c, f_up, gf_b, gf_c, gf_hfs_c   
+  real(kind=dp) :: gf_hfs_b, f_up_max, f_up_min, f_lo, f_lo_max, f_lo_min, w6j, uncertainty
+  real(kind=dp) :: E_l, E_u, A_lo, A_up, B_lo, B_up, DE_hfs, DE_hfs_eV, lambda_v
 
   logical :: low_level, upper_level
   
@@ -38,12 +38,13 @@ program hyperfine_transition_data
   print *, 'Full name of the second hfs data file'
   read (*, '(a)') filename3
   print *, 'Total number for the levels of the computed A and B hfs constants'
-  read (*, '(i3)') levels      ! needed for ALLOCATION of E_levels, hfs_results, ab_constants
+  read (*, '(i3)') levels     ! needed for ALLOCATION of 'E_levels', 'hfs_results' and 'ab_constants' matrix parameters
   print*, 'Give the nuclear spin I'
-  read (*,'(f3.1)') nuc_spin   ! For 27Al is 2.5
+  read (*,'(f3.1)') nuc_spin  ! For 27Al is I = 2.5
 
   allocate(E_levels(levels), hfs_results(levels,3), ab_constants(levels,3))
-  
+  print*, MHz_to_invcm
+  print*, au_to_invcm
   !Open and First Reading of the input files to count the number of lines
   call line_counting(10,filename1,count1)
   call line_counting(20,filename2,count2)
@@ -57,12 +58,12 @@ program hyperfine_transition_data
      read(20, '(a)') dummy ! headers and blank lines
   end do
   do i = 1, count2-6
-     read(20, '(d14.6, a52, d12.7, d16.7, a16)') hfs_results(i,1), dummy, hfs_results(i,2), hfs_results(i,3), dummy
+     read(20, '(d15.7, a52, d12.7, d16.7, a16)') hfs_results(i,1), dummy, hfs_results(i,2), hfs_results(i,3), dummy
      ab_constants(i,1) = hfs_results(i,1)*au_to_invcm
      ab_constants(i,2) = hfs_results(i,2)*MHz_to_invcm
      ab_constants(i,3) = hfs_results(i,3)*MHz_to_invcm
      !print*, hfs_results(i,1), hfs_results(i,2), hfs_results(i,3)
-     print*, ab_constants(i,1), ab_constants(i,2), ab_constants(i,3)
+     !print*, ab_constants(i,1), ab_constants(i,2), ab_constants(i,3)
   enddo
   rewind(20)
   do j = 1, 6
@@ -70,7 +71,7 @@ program hyperfine_transition_data
   end do
   do i = 1, count2-6
      read(20, '(a2, a12, a96)') dummy, E_levels(i), dummy
-     print*, E_levels(i)
+     !print*, E_levels(i)
   end do
   close(20)
   !--------------- FILE 2 - ODD states -----------------
@@ -78,12 +79,12 @@ program hyperfine_transition_data
      read(30, '(a)') dummy
   end do
   do i = count2-6+1, count2+count3-12
-     read(30, '(d14.6, a46, d12.7, d16.7, a16)') hfs_results(i,1), dummy, hfs_results(i,2), hfs_results(i,3), dummy
+     read(30, '(d15.7, a46, d12.7, d16.7, a16)') hfs_results(i,1), dummy, hfs_results(i,2), hfs_results(i,3), dummy
      ab_constants(i,1) = hfs_results(i,1)*au_to_invcm
      ab_constants(i,2) = hfs_results(i,2)*MHz_to_invcm
      ab_constants(i,3) = hfs_results(i,3)*MHz_to_invcm
      !print *, hfs_results(i,1), hfs_results(i,2), hfs_results(i,3)
-     print*, ab_constants(i,1), ab_constants(i,2), ab_constants(i,3)
+     !print*, ab_constants(i,1), ab_constants(i,2), ab_constants(i,3)
   enddo
   rewind(30)
   do j = 1, 6
@@ -91,7 +92,7 @@ program hyperfine_transition_data
   end do
   do i = count2-6+1, count2+count3-12
      read(30, '(a2, a12, a96)') dummy, E_levels(i), dummy
-     print*, E_levels(i)
+     !print*, E_levels(i)
   end do
   close(30)
   !================================================================================================================
@@ -101,9 +102,16 @@ program hyperfine_transition_data
        action='write', position='append')
   !Writing the headers in the output file
   write(40,'(a51)') '         UPPER                     LOWER                     '
-  write(40,'(a113)') '    Conf        J    F       Conf        J    F     E (cm-1)     A (s-1)         gf          log(gf) &
-       &   +/-      '
+  write(40,'(a132)') '    Conf        J    F       Conf        J    F    E (cm-1)    E (ev)       Å(VAC)       A (s-1)      &
+       &   gf          log(gf)    +/-  '
 
+  !The strings of the format for writing data into the output file
+  Coul_data_1a = '(1x,a11,a1,2x,f3.1,2x,f3.1,3x,a11,3x,f3.1,2x,f3.1,2x,f9.3,2x,f9.7,3x,f10.2,3x,a1,1x,d11.5,2x,d12.6)'
+  Coul_data_1b = '(1x,a11,3x,f3.1,2x,f3.1,3x,a11,a1,2x,f3.1,2x,f3.1,2x,f9.3,2x,f9.7,3x,f10.2,3x,a1,1x,d11.5,2x,d12.6)'
+  Coul_data_1c = '(1x,a11,3x,f3.1,2x,f3.1,3x,a11,3x,f3.1,2x,f3.1,2x,f9.3,2x,f9.7,3x,f10.2,3x,a1,1x,d11.5,2x,d12.6)'
+  Coul_data_2  = '(a45,f3.1,2x,f9.3,2x,f9.7,3x,f10.2,3x,a1,1x,d11.5,2x,d12.6)'
+  Bab_data     = '(a86,a1,1x,d11.5,2x,d12.6,3x,f8.5,2x,f7.5)'
+  
   !writing the rest of the data is done simultaneously with the reading of the transition ct.lsj file
   do j = 1, 3
      read(10, '(a)') dummy
@@ -154,24 +162,21 @@ program hyperfine_transition_data
      
      j_up = real(twoj_up)/2
      j_lo = real(twoj_lo)/2
-     !print*, j_up, j_lo 
+     print*, j_up, j_lo 
      ! estimating the possible F quantum numbers for upper and lower levels
      f_up_max = j_up + nuc_spin
      f_up_min = abs(j_up - nuc_spin)    
      f_lo_max = j_lo + nuc_spin
      f_lo_min = abs(j_lo - nuc_spin)
-     !print*, f_up_max, f_up_min
+     print*, f_up_max, f_up_min
      k = 0  ! step counter of possible F values for the UPPER level !***
      l = 0  ! step counter of possible F values for the LOWER level !***
      f_up = f_up_min
      f_lo = f_lo_min
-
-     !The strings of the format for writing data into the output file
-     Bab_data = '(a61,a1,1x,d11.5,2x,d12.6,3x,f8.5,2x,f7.5)'
      
      do while (f_up.le.f_up_max)  ! loop for all possible F values of the UPPER level
         blank = 0  ! when zero there is a new combination of quantum nubers and therefore a
-                   ! complete line of variables in the output file  !%%%
+                   ! complete line of variables (upper and lower levels specifications) in the output file  !%%%
         l = 0      ! step counter of possible F values for the LOWER level !***
         do while (f_lo.le.f_lo_max)  ! loop for all possible F values of the LOWER level !%%%
            ! checking whether the transition is allowed i.e. DF = 0 or +/-1
@@ -180,7 +185,7 @@ program hyperfine_transition_data
                 (f_up.ne.0 .or. f_lo.ne.0)) then
               !===============NEW======================
               ! calculate the hfs transition energies
-              call hfs_transitionE(nuc_spin,f_up,j_up,E_u,A_up,B_up,f_lo,j_lo,E_l,A_lo,B_lo, DE_hfs)
+              call hfs_transitionE(nuc_spin,f_up,j_up,E_u,A_up,B_up,f_lo,j_lo,E_l,A_lo,B_lo, DE_hfs,DE_hfs_eV,lambda_v)
               !========================================
               ! calculate the transition data in the COULOBM gauge for this hfs transition
               w6j = wig6j(j_lo, nuc_spin, f_lo, f_up, l2, j_up)
@@ -191,15 +196,15 @@ program hyperfine_transition_data
               ! special case for the Al_I computations since two states have the same label and we need to distinguish the second one with a "b"
               ! this state can be either the lower or the upper and thus we need to check that for both cases
               if (conf_up.eq.'3s(2).4d_2D' .and. (E_up.eq.' -242.146860' .or. E_up.eq.' -242.146837')) then ! we need to check for both j=3/2,5/2 
-                 write(40,'(1x,a11,a1,2x,f3.1,2x,f3.1,3x,a11,3x,f3.1,2x,f3.1,2x,f9.4,2x,a1,1x,d11.5,2x,d12.6)') &
-                      conf_up,'b', j_up, f_up, conf_lo, j_lo, f_lo, DE_hfs, 'C', Ahfs_c, gf_hfs_c
+                 write(40, FMT=Coul_data_1a) conf_up,'b', j_up, f_up, conf_lo, j_lo, f_lo, DE_hfs, DE_hfs_eV, lambda_v, &
+                      'C', Ahfs_c, gf_hfs_c
               elseif (conf_lo.eq.'3s(2).4d_2D' .and. (E_lo.eq.' -242.146860' .or. E_lo .eq.' -242.146837')) then
-                 write(40,'(1x,a11,3x,f3.1,2x,f3.1,3x,a11,a1,2x,f3.1,2x,f3.1,2x,f9.4,2x,a1,1x,d11.5,2x,d12.6)') &
-                      conf_up, j_up, f_up, conf_lo,'b', j_lo, f_lo, DE_hfs, 'C', Ahfs_c, gf_hfs_c
+                 write(40, FMT=Coul_data_1b) conf_up, j_up, f_up, conf_lo,'b', j_lo, f_lo, DE_hfs, DE_hfs_eV, lambda_v, &
+                      'C', Ahfs_c, gf_hfs_c
               !---------------------------------------------------------------------------------------------------------------------------------   
               else
-                 write(40,'(1x,a11,3x,f3.1,2x,f3.1,3x,a11,3x,f3.1,2x,f3.1,2x,f9.4,2x,a1,1x,d11.5,2x,d12.6)') &
-                      conf_up, j_up, f_up, conf_lo, j_lo, f_lo, DE_hfs, 'C', Ahfs_c, gf_hfs_c
+                 write(40, FMT=Coul_data_1c) conf_up, j_up, f_up, conf_lo, j_lo, f_lo, DE_hfs, DE_hfs_eV, lambda_v, &
+                      'C', Ahfs_c, gf_hfs_c
               end if
               !print*, Ahfs_c, gf_hfs_c
               ! calculate the transition data in the BABUSHKIN gauge for this hfs transition
@@ -215,15 +220,14 @@ program hyperfine_transition_data
            elseif (0.le.abs(f_up-f_lo) .and. abs(f_up-f_lo).le.1 .and. blank.ne.0) then
               !===============NEW======================
               ! calculate the hfs transition energies
-              call hfs_transitionE(nuc_spin,f_up,j_up,E_u,A_up,B_up,f_lo,j_lo,E_l,A_lo,B_lo, DE_hfs)
+              call hfs_transitionE(nuc_spin,f_up,j_up,E_u,A_up,B_up,f_lo,j_lo,E_l,A_lo,B_lo, DE_hfs,DE_hfs_eV,lambda_v)
               !========================================
               ! calculate the transition data in the COULOBM gauge for this hfs transition         
               w6j = wig6j(j_lo, nuc_spin, f_lo, f_up, l2, j_up)
               call probabilities(f_lo, j_up, w6j, A_c, Ahfs_c)
               call weightedf(f_up, f_lo, j_lo, w6j, gf_c, gf_hfs_c)                    
-              ! write data in the output file
-              write(40, '(a45,f3.1,2x,f9.4,2x,a1,1x,d11.5,2x,d12.6)') '                                            ', &
-                   f_lo, DE_hfs, 'C', Ahfs_c, gf_hfs_c
+              write(40, FMT=Coul_data_2) '                                            ', &
+                   f_lo, DE_hfs, DE_hfs_eV,lambda_v, 'C', Ahfs_c, gf_hfs_c
               ! calculate the transition data in the BABUSHKIN gauge for this hfs transition
               call probabilities(f_lo, j_up, w6j, A_b, Ahfs_b)
               call weightedf(f_up, f_lo, j_lo, w6j, gf_b, gf_hfs_b)
@@ -258,7 +262,6 @@ contains
     character(180) :: string
     
     open(unit=fnum, file=filename, status='old', form='formatted', action='read')
-
     counter = 0    
     do
        read(fnum, '(a)', end=19) string
@@ -271,26 +274,46 @@ contains
     
   end subroutine line_counting
   !-----------------------------------------------------------------------------------------------------
-  subroutine hfs_transitionE(I_spin,f_upper,j_upper,E_upper,A_upper,B_upper,f_lower,j_lower,E_lower,A_lower, B_lower, DeltaE_hfs)
+  subroutine hfs_transitionE(I_spin,f_upper,j_upper,E_upper,A_upper,B_upper,f_lower,j_lower,E_lower,A_lower, B_lower,&
+       DeltaE_hfs,DeltaE_hfs_eV,lambda_vac)
     implicit none
 
+    integer, parameter :: dp = selected_real_kind(15, 307)
+    real(kind=dp),parameter :: invcm_to_eV = 1.2398424D-04, cm_to_ang = 1D+08  
     double precision, intent(in) :: I_spin, f_upper, j_upper, E_upper, A_upper, B_upper
     double precision, intent(in) :: f_lower, j_lower, E_lower, A_lower, B_lower
-    double precision, intent(out) :: DeltaE_hfs
-    double precision :: C_lower, Omega_lower, Ehfs_lower, C_upper, Omega_upper, Ehfs_upper
-
+    double precision, intent(out) :: DeltaE_hfs, DeltaE_hfs_eV, lambda_vac
+    double precision :: C_lower, Omega_lower, Ehfs_lower, C_upper, Omega_upper, Ehfs_upper, Omega_den, Omega_num
 
     C_upper = f_upper*(f_upper+1)-j_upper*(j_upper+1)-I_spin*(I_spin+1)
-    Omega_upper=(0.75*C_upper*(C_upper+1)-I_spin*(I_spin+1)*j_upper*(j_upper+1))/(2.0*I_spin*(2.0*I_spin-1)*j_upper*(2.0*j_upper-1))
-    print*, Omega_upper
-    Ehfs_upper = E_upper + 0.5*A_upper*C_upper + B_upper*Omega_upper
+    if (j_upper.eq.0.5) then    
+       Ehfs_upper = E_upper + 0.5*A_upper*C_upper 
+    else
+       Omega_upper=(0.75*C_upper*(C_upper+1)-I_spin*(I_spin+1)*j_upper*(j_upper+1))/&
+            (2.0*I_spin*(2.0*I_spin-1)*j_upper*(2.0*j_upper-1))
+       !print*, Omega_upper
+       Ehfs_upper = E_upper + 0.5*A_upper*C_upper + B_upper*Omega_upper
+    end if
+    !print*, Ehfs_upper
     
     C_lower = f_lower*(f_lower+1)-j_lower*(j_lower+1)-I_spin*(I_spin+1)
-    Omega_lower=(0.75*C_lower*(C_lower+1)-I_spin*(I_spin+1)*j_lower*(j_lower+1))/(2.0*I_spin*(2.0*I_spin-1)*j_lower*(2.0*j_lower-1))
-    print*, Omega_lower
-    Ehfs_lower = E_lower + 0.5*A_lower*C_lower + B_lower*Omega_lower 
-    
+    if (j_lower.eq.0.5) then
+       Ehfs_lower = E_lower + 0.5*A_lower*C_lower
+    else
+       Omega_den = (2.0*I_spin*(2.0*I_spin-1)*j_lower*(2.0*j_lower-1))
+       Omega_num = (0.75*C_lower*(C_lower+1)-I_spin*(I_spin+1)*j_lower*(j_lower+1))
+       Omega_lower = Omega_num/Omega_den
+            
+       !print*, C_lower, Omega_num, Omega_den, Omega_lower
+       Ehfs_lower = E_lower + 0.5*A_lower*C_lower + B_lower*Omega_lower 
+    end if
+    !print*, Ehfs_lower
+ 
     DeltaE_hfs = Ehfs_upper - Ehfs_lower
+    DeltaE_hfs_eV = DeltaE_hfs*invcm_to_eV
+    lambda_vac = cm_to_ang/DeltaE_hfs
+
+    !print*, DeltaE_hfs, DeltaE_hfs_eV, lambda_vac
     
   end subroutine hfs_transitionE
   !-----------------------------------------------------------------------------------------------------
