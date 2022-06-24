@@ -43,8 +43,7 @@ program hyperfine_transition_data
   read (*,'(f3.1)') nuc_spin  ! For 27Al is I = 2.5
 
   allocate(E_levels(levels), hfs_results(levels,3), ab_constants(levels,3))
-  print*, MHz_to_invcm
-  print*, au_to_invcm
+
   !Open and First Reading of the input files to count the number of lines
   call line_counting(10,filename1,count1)
   call line_counting(20,filename2,count2)
@@ -98,11 +97,11 @@ program hyperfine_transition_data
   !================================================================================================================
   !================================================================================================================
   !writing the headers of the output file
-  open(40, file='hfs.ct.lsj', status='old', form='formatted', &   !Open the output hfs transition data file
+  open(40, file='hfs_transitions.lsj.out', status='unknown', form='formatted', &   !Open the output hfs transition data file
        action='write', position='append')
   !Writing the headers in the output file
   write(40,'(a51)') '         UPPER                     LOWER                     '
-  write(40,'(a132)') '    Conf        J    F       Conf        J    F    E (cm-1)    E (ev)       Å(VAC)       A (s-1)      &
+  write(40,'(a132)') '    Conf        J    F       Conf        J    F    E (cm-1)    E (eV)       Å(VAC)       A (s-1)      &
        &   gf          log(gf)    +/-  '
 
   !The strings of the format for writing data into the output file
@@ -121,20 +120,16 @@ program hyperfine_transition_data
   do i = 1, (count1-3)/7        !header lines are 3 in the .ct.lsj input file
      low_level = .false.
      upper_level = .false.
-     ! every loop reads the two blank lines and the next 5 contain the data for each transition 
+     ! every loop reads the two blank lines and the next 5 lines that contain the data for each transition 
      do j = 1, 2
         read(10, '(a)') dummy
      enddo
-     ! and then reads the other five lines of the input file and assign the useful values to variables
      read(10, '(i4, a12, a22, a11)') twoj_lo, E_lo, dummy, conf_lo
      read(10, '(i4, a12, a22, a11)') twoj_up, E_up, dummy, conf_up
      read(10, '(a)') dummy
      read(10, '(a30, d12.7, a9, d12.1, a17)') dummy, gf_b, dummy, A_b, dummy
      read(10, '(a30, d12.7, a8, d13.3)') dummy, gf_c, dummy, A_c
-     print*, E_lo, twoj_lo, conf_lo
-     print*, E_up, twoj_up, conf_up
-     !print*, gf_b, A_b
-     !print*, gf_c, A_c
+
      !-----------------------------------------------------------------------------------------
      ! based on the E_lo & E_up levels we get the corresponding values of A and B hfs constants
      do m = 1, levels
@@ -158,17 +153,19 @@ program hyperfine_transition_data
      E_u  = ab_constants(uu,1)
      A_up = ab_constants(uu,2)
      B_up = ab_constants(uu,3)
+     !print*, 'Low level energy:'  , ab_constants(ll,1), 'A:', ab_constants(ll,2), 'B:', ab_constants(ll,3)
+     !print*, 'Upper level energy:', ab_constants(uu,1), 'A:', ab_constants(uu,2), 'B:', ab_constants(uu,3)
      !-----------------------------------------------------------------------------------------
      
      j_up = real(twoj_up)/2
      j_lo = real(twoj_lo)/2
-     print*, j_up, j_lo 
+     !print*, j_up, j_lo 
      ! estimating the possible F quantum numbers for upper and lower levels
      f_up_max = j_up + nuc_spin
      f_up_min = abs(j_up - nuc_spin)    
      f_lo_max = j_lo + nuc_spin
      f_lo_min = abs(j_lo - nuc_spin)
-     print*, f_up_max, f_up_min
+     !print*, f_up_max, f_up_min
      k = 0  ! step counter of possible F values for the UPPER level !***
      l = 0  ! step counter of possible F values for the LOWER level !***
      f_up = f_up_min
@@ -187,7 +184,7 @@ program hyperfine_transition_data
               ! calculate the hfs transition energies
               call hfs_transitionE(nuc_spin,f_up,j_up,E_u,A_up,B_up,f_lo,j_lo,E_l,A_lo,B_lo, DE_hfs,DE_hfs_eV,lambda_v)
               !========================================
-              ! calculate the transition data in the COULOBM gauge for this hfs transition
+              ! calculate the transition data in the COULOMB gauge for this hfs transition
               w6j = wig6j(j_lo, nuc_spin, f_lo, f_up, l2, j_up)
               call probabilities(f_lo, j_up, w6j, A_c, Ahfs_c)
               call weightedf(f_up, f_lo, j_lo, w6j, gf_c, gf_hfs_c)           
@@ -284,17 +281,20 @@ contains
     double precision, intent(in) :: f_lower, j_lower, E_lower, A_lower, B_lower
     double precision, intent(out) :: DeltaE_hfs, DeltaE_hfs_eV, lambda_vac
     double precision :: C_lower, Omega_lower, Ehfs_lower, C_upper, Omega_upper, Ehfs_upper, Omega_den, Omega_num
+    double precision :: first_hfs_term_u, first_hfs_term_l, sec_hfs_term_l
 
     C_upper = f_upper*(f_upper+1)-j_upper*(j_upper+1)-I_spin*(I_spin+1)
-    if (j_upper.eq.0.5) then    
-       Ehfs_upper = E_upper + 0.5*A_upper*C_upper 
+    if (j_upper.eq.0.5) then
+       first_hfs_term_u = 0.5*A_upper*C_upper 
+       Ehfs_upper = E_upper + first_hfs_term_u
+       !print*, 'C_upper:',C_upper, 'first_hfs_term for upper level:', first_hfs_term_u
     else
        Omega_upper=(0.75*C_upper*(C_upper+1)-I_spin*(I_spin+1)*j_upper*(j_upper+1))/&
             (2.0*I_spin*(2.0*I_spin-1)*j_upper*(2.0*j_upper-1))
        !print*, Omega_upper
        Ehfs_upper = E_upper + 0.5*A_upper*C_upper + B_upper*Omega_upper
     end if
-    !print*, Ehfs_upper
+    !print*, 'Energy of the upper hfs level:', Ehfs_upper
     
     C_lower = f_lower*(f_lower+1)-j_lower*(j_lower+1)-I_spin*(I_spin+1)
     if (j_lower.eq.0.5) then
@@ -305,15 +305,20 @@ contains
        Omega_lower = Omega_num/Omega_den
             
        !print*, C_lower, Omega_num, Omega_den, Omega_lower
-       Ehfs_lower = E_lower + 0.5*A_lower*C_lower + B_lower*Omega_lower 
+       first_hfs_term_l = 0.5*A_lower*C_lower
+       sec_hfs_term_l = B_lower*Omega_lower
+       Ehfs_lower = E_lower + first_hfs_term_l + sec_hfs_term_l
+       !print*, first_hfs_term_l, sec_hfs_term_l
     end if
-    !print*, Ehfs_lower
+    !print*, 'Energy of the lower hfs level:', Ehfs_lower
  
     DeltaE_hfs = Ehfs_upper - Ehfs_lower
     DeltaE_hfs_eV = DeltaE_hfs*invcm_to_eV
     lambda_vac = cm_to_ang/DeltaE_hfs
 
-    !print*, DeltaE_hfs, DeltaE_hfs_eV, lambda_vac
+    !print*, 'Hfs transition energy in cm-1:', DeltaE_hfs
+    !print*, 'Hfs transition energy in eV:'  , DeltaE_hfs_eV
+    !print*, 'Hfs transition wavelength in vacuum:', lambda_vac
     
   end subroutine hfs_transitionE
   !-----------------------------------------------------------------------------------------------------
