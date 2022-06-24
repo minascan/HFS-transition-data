@@ -5,7 +5,7 @@ program hyperfine_transition_data
    !!!                                 name1.chlsj                          !!!
    !!!                                 name2.chlsj                          !!!
   
-   !!!             output file: hfs.ct.lsj                                  !!!
+   !!!             output file: hfs_transitions.lsj.out                     !!!
    !!!                                                                      !!!
    !!!     Written by Asimina Papoulia ,   September 2018                   !!!
    !!!                     Last Update ,    November 2019                   !!!
